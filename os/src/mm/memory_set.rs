@@ -9,6 +9,7 @@ use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
+use core::mem::swap;
 use lazy_static::*;
 use riscv::register::satp;
 
@@ -75,6 +76,40 @@ impl MemorySet {
     /// Add a new MapArea into this MemorySet.
     /// Assuming that there are no conflicts in the virtual address
     /// space.
+    /// Insert framed area if there is no conflict.
+    pub fn try_insert_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+    ) -> bool {
+        let insert_area = MapArea::new(start_va, end_va, MapType::Framed, permission);
+        for area in &self.areas {
+            if is_map_area_overlap(area, &insert_area) {
+                return false;
+            }
+        }
+        self.insert_framed_area(start_va, end_va, permission);
+        true
+    }
+    /// Remove framed area if exists.
+    pub fn try_remove_framed_area(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        let remove_area = MapArea::new(start_va, end_va, MapType::Framed, MapPermission::empty());
+        let mut index = 0;
+        for area in &mut self.areas {
+            let l1 = remove_area.get_start_vpn().0;
+            let r1 = remove_area.get_end_vpn().0;
+            let l2 = area.get_start_vpn().0;
+            let r2 = area.get_end_vpn().0;
+            if l1 == l2 && r1 == r2 {
+                area.unmap(&mut self.page_table);
+                self.areas.remove(index);
+                return true;
+            }
+            index += 1;
+        }
+        false
+    }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
@@ -400,6 +435,24 @@ impl MapArea {
             current_vpn.step();
         }
     }
+    pub fn get_start_vpn(&self) -> VirtPageNum {
+        self.vpn_range.get_start()
+    }
+    pub fn get_end_vpn(&self) -> VirtPageNum {
+        self.vpn_range.get_end()
+    }
+}
+
+pub fn is_map_area_overlap(area1: &MapArea, area2: &MapArea) -> bool {
+    let mut l1 = area1.get_start_vpn().0;
+    let mut r1 = area1.get_end_vpn().0;
+    let mut l2 = area2.get_start_vpn().0;
+    let mut r2 = area2.get_end_vpn().0;
+    if l1 > l2 {
+        swap(&mut l1, &mut l2);
+        swap(&mut r1, &mut r2);
+    }
+    l2 < r1
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
