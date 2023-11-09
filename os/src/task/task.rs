@@ -1,7 +1,7 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
@@ -71,6 +71,15 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Count syscall times
+    pub syscall_times_list: [u32; MAX_SYSCALL_NUM],
+
+    /// Start time
+    pub start_time: usize,
+
+    /// If the task has started
+    pub is_started: bool,
 }
 
 impl TaskControlBlockInner {
@@ -135,6 +144,9 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    syscall_times_list: [0; MAX_SYSCALL_NUM],
+                    start_time: 0,
+                    is_started: false,
                 })
             },
         };
@@ -216,6 +228,9 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    syscall_times_list: [0; MAX_SYSCALL_NUM],
+                    start_time: 0,
+                    is_started: false,
                 })
             },
         });
@@ -260,6 +275,19 @@ impl TaskControlBlock {
         } else {
             None
         }
+    }
+    /// increase syscall count
+    pub fn increase_syscall_count(&mut self, syscall_id: usize) -> bool {
+        if syscall_id >= MAX_SYSCALL_NUM {
+            return false;
+        }
+        self.syscall_times_list[syscall_id] += 1;
+        true
+    }
+    /// set task start time
+    pub fn set_start_time(&mut self) {
+        self.start_time = get_time_ms();
+        self.is_started = true;
     }
 }
 
