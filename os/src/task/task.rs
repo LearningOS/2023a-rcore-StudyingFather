@@ -1,9 +1,10 @@
 //! Types related to task management
 use super::TaskContext;
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{
     kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
 };
+use crate::timer::get_time_ms;
 use crate::trap::{trap_handler, TrapContext};
 
 /// The task control block (TCB) of a task.
@@ -28,6 +29,15 @@ pub struct TaskControlBlock {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Count syscall times
+    pub syscall_times_list: [u32; MAX_SYSCALL_NUM],
+
+    /// Start time
+    pub start_time: usize,
+
+    /// If the task has started
+    pub is_started: bool,
 }
 
 impl TaskControlBlock {
@@ -63,6 +73,9 @@ impl TaskControlBlock {
             base_size: user_sp,
             heap_bottom: user_sp,
             program_brk: user_sp,
+            syscall_times_list: [0; MAX_SYSCALL_NUM],
+            start_time: 0,
+            is_started: false,
         };
         // prepare TrapContext in user space
         let trap_cx = task_control_block.get_trap_cx();
@@ -95,6 +108,19 @@ impl TaskControlBlock {
         } else {
             None
         }
+    }
+    /// increase syscall count
+    pub fn increase_syscall_count(&mut self, syscall_id: usize) -> bool {
+        if syscall_id >= MAX_SYSCALL_NUM {
+            return false;
+        }
+        self.syscall_times_list[syscall_id] += 1;
+        true
+    }
+    /// set task start time
+    pub fn set_start_time(&mut self) {
+        self.start_time = get_time_ms();
+        self.is_started = true;
     }
 }
 
