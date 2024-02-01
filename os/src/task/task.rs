@@ -5,6 +5,7 @@ use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
+use crate::timer::get_time_ms;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
@@ -102,6 +103,19 @@ impl TaskControlBlockInner {
             self.fd_table.push(None);
             self.fd_table.len() - 1
         }
+    }
+    /// increase syscall count
+    pub fn increase_syscall_count(&mut self, syscall_id: usize) -> bool {
+        if syscall_id >= MAX_SYSCALL_NUM {
+            return false;
+        }
+        self.syscall_times_list[syscall_id] += 1;
+        true
+    }
+    /// set task start time
+    pub fn set_start_time(&mut self) {
+        self.start_time = get_time_ms();
+        self.is_started = true;
     }
 }
 
@@ -275,19 +289,6 @@ impl TaskControlBlock {
         } else {
             None
         }
-    }
-    /// increase syscall count
-    pub fn increase_syscall_count(&mut self, syscall_id: usize) -> bool {
-        if syscall_id >= MAX_SYSCALL_NUM {
-            return false;
-        }
-        self.syscall_times_list[syscall_id] += 1;
-        true
-    }
-    /// set task start time
-    pub fn set_start_time(&mut self) {
-        self.start_time = get_time_ms();
-        self.is_started = true;
     }
 }
 
