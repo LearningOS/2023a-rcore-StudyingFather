@@ -8,6 +8,7 @@ use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
 use crate::sync::UPSafeCell;
+use crate::task::{MapPermission, VirtAddr, MAX_SYSCALL_NUM};
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -43,6 +44,51 @@ impl Processor {
     ///Get current task in cloning semanteme
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
         self.current.as_ref().map(Arc::clone)
+    }
+
+    /// Get the list of syscall times of current task
+    pub fn get_current_task_syscall_times(&self) -> [u32; MAX_SYSCALL_NUM] {
+        let current = self.current().unwrap();
+        let inner = current.inner_exclusive_access();
+        inner.syscall_times_list
+    }
+
+    /// get the start time of current task
+    pub fn get_current_task_start_time(&self) -> usize {
+        let current = self.current().unwrap();
+        let inner = current.inner_exclusive_access();
+        inner.start_time
+    }
+
+    /// increase syscall count for current task
+    pub fn increase_syscall_count(&self, syscall_id: usize) {
+        let current = self.current().unwrap();
+        let mut inner = current.inner_exclusive_access();
+        inner.increase_syscall_count(syscall_id);
+    }
+
+    /// map virtual addr to physical addr
+    pub fn mmap(&self, start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) -> isize {
+        let current = self.current().unwrap();
+        let mut inner = current.inner_exclusive_access();
+        let memory_set = &mut inner.memory_set;
+        if memory_set.try_insert_framed_area(start_va, end_va, permission) {
+            return 0;
+        } else {
+            return -1;
+        }
+    }
+
+    /// unmap virtual addr to physical addr
+    pub fn munmap(&self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        let current = self.current().unwrap();
+        let mut inner = current.inner_exclusive_access();
+        let memory_set = &mut inner.memory_set;
+        if memory_set.try_remove_framed_area(start_va, end_va) {
+            return 0;
+        } else {
+            return -1;
+        }
     }
 }
 

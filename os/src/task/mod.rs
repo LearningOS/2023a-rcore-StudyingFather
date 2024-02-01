@@ -21,7 +21,9 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use crate::config::MAX_SYSCALL_NUM;
 use crate::loader::get_app_data_by_name;
+use crate::mm::{MapPermission, VirtAddr};
 use alloc::sync::Arc;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
@@ -35,6 +37,8 @@ pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
     Processor,
 };
+
+use self::processor::PROCESSOR;
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
     // There must be an application running.
@@ -118,25 +122,31 @@ pub fn add_initproc() {
 
 /// Get the list of syscall times of current task
 pub fn get_current_task_syscall_times() -> [u32; MAX_SYSCALL_NUM] {
-    TASK_MANAGER.get_current_task_syscall_times()
+    PROCESSOR
+        .exclusive_access()
+        .get_current_task_syscall_times()
 }
 
 /// get the start time of current task
 pub fn get_current_task_start_time() -> usize {
-    TASK_MANAGER.get_current_task_start_time()
+    PROCESSOR.exclusive_access().get_current_task_start_time()
 }
 
 /// increase syscall count for current task
 pub fn increase_syscall_count(syscall_id: usize) {
-    TASK_MANAGER.increase_syscall_count(syscall_id);
+    PROCESSOR
+        .exclusive_access()
+        .increase_syscall_count(syscall_id);
 }
 
 /// map virtual addr to physical addrf
 pub fn mmap(start_va: VirtAddr, end_va: VirtAddr, permission: MapPermission) -> isize {
-    TASK_MANAGER.mmap(start_va, end_va, permission)
+    PROCESSOR
+        .exclusive_access()
+        .mmap(start_va, end_va, permission)
 }
 
 /// unmap virtual addr to physical addr
 pub fn munmap(start_va: VirtAddr, end_va: VirtAddr) -> isize {
-    TASK_MANAGER.munmap(start_va, end_va)
+    PROCESSOR.exclusive_access().munmap(start_va, end_va)
 }
