@@ -81,6 +81,12 @@ pub struct TaskControlBlockInner {
 
     /// If the task has started
     pub is_started: bool,
+
+    /// Program stride
+    pub stride: isize,
+
+    /// Program priority
+    pub priority: isize,
 }
 
 impl TaskControlBlockInner {
@@ -161,6 +167,8 @@ impl TaskControlBlock {
                     syscall_times_list: [0; MAX_SYSCALL_NUM],
                     start_time: 0,
                     is_started: false,
+                    stride: 0,
+                    priority: 16,
                 })
             },
         };
@@ -245,6 +253,8 @@ impl TaskControlBlock {
                     syscall_times_list: [0; MAX_SYSCALL_NUM],
                     start_time: 0,
                     is_started: false,
+                    stride: 0,
+                    priority: 16,
                 })
             },
         });
@@ -258,6 +268,15 @@ impl TaskControlBlock {
         task_control_block
         // **** release child PCB
         // ---- release parent PCB
+    }
+
+    /// spawn a new process
+    pub fn spawn(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        let mut parent_inner = self.inner_exclusive_access();
+        let task_control_block = Arc::new(TaskControlBlock::new(elf_data));
+        task_control_block.inner_exclusive_access().parent = Some(Arc::downgrade(self));
+        parent_inner.children.push(task_control_block.clone());
+        task_control_block
     }
 
     /// get pid of process
