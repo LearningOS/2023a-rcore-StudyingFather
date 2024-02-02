@@ -49,21 +49,6 @@ fn write_u8_slice(src: &[u8], dst: Vec<&mut [u8]>) {
     }
 }
 
-/// convert any data type to u8 slice
-unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
-    ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
-}
-
-fn write_u8_slice(src: &[u8], dst: Vec<&mut [u8]>) {
-    let mut s = 0;
-    for part in dst {
-        for elem in part {
-            *elem = src[s];
-            s += 1;
-        }
-    }
-}
-
 pub fn sys_exit(exit_code: i32) -> ! {
     trace!("kernel:pid[{}] sys_exit", current_task().unwrap().pid.0);
     exit_current_and_run_next(exit_code);
