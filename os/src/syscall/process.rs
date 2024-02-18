@@ -1,13 +1,11 @@
 //! Process management syscalls
 //!
 use alloc::sync::Arc;
-use alloc::vec::Vec;
-use core::mem::size_of;
 
 use crate::{
     config::{MAX_SYSCALL_NUM, PAGE_SIZE},
     fs::{open_file, OpenFlags},
-    mm::{translated_byte_buffer, translated_refmut, translated_str, MapPermission, VirtAddr},
+    mm::{translated_refmut, translated_str, MapPermission, VirtAddr},
     task::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
         get_current_task_start_time, get_current_task_syscall_times, mmap, munmap,
@@ -32,21 +30,6 @@ pub struct TaskInfo {
     syscall_times: [u32; MAX_SYSCALL_NUM],
     /// Total running time of task
     time: usize,
-}
-
-/// convert any data type to u8 slice
-unsafe fn any_as_u8_slice<T: Sized>(p: &T) -> &[u8] {
-    ::core::slice::from_raw_parts((p as *const T) as *const u8, ::core::mem::size_of::<T>())
-}
-
-fn write_u8_slice(src: &[u8], dst: Vec<&mut [u8]>) {
-    let mut s = 0;
-    for part in dst {
-        for elem in part {
-            *elem = src[s];
-            s += 1;
-        }
-    }
 }
 
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -142,16 +125,13 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
+    let token = current_user_token();
     let us = get_time_us();
-    let res = TimeVal {
+    let ts = translated_refmut(token, ts);
+    *ts = TimeVal {
         sec: us / 1_000_000,
         usec: us % 1_000_000,
     };
-    let res_slice = unsafe { any_as_u8_slice(&res) };
-    let ts = translated_byte_buffer(current_user_token(), ts as *const u8, size_of::<TimeVal>());
-    // info!("sys_get_time: start to write result!");
-    write_u8_slice(res_slice, ts);
-    // info!("sys_get_time: write result succeed!");
     0
 }
 
@@ -160,16 +140,15 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
+    let token = current_user_token();
     let syscall_times = get_current_task_syscall_times();
     let start_time = get_current_task_start_time();
-    let res = TaskInfo {
+    let ti = translated_refmut(token, ti);
+    *ti = TaskInfo {
         status: TaskStatus::Running,
         syscall_times,
         time: get_time_ms() - start_time,
     };
-    let res_slice = unsafe { any_as_u8_slice(&res) };
-    let ti = translated_byte_buffer(current_user_token(), ti as *const u8, size_of::<TaskInfo>());
-    write_u8_slice(res_slice, ti);
     0
 }
 
